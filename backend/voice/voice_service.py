@@ -20,11 +20,11 @@ from .service import service
 
 
 def whisper_available() -> bool:
-    return "whisper_local" in service.stt.available()
+    return len(service.stt.available()) > 0
 
 
 def gtts_available() -> bool:
-    return "gtts" in service.tts.available()
+    return len(service.tts.available()) > 0
 
 
 def preload() -> bool:
