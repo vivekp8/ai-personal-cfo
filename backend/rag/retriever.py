@@ -55,9 +55,16 @@ def _init() -> bool:
             return False
         try:
             _client = chromadb.PersistentClient(path=_PERSIST_DIR)
-            _embed_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-                model_name="all-MiniLM-L6-v2"
-            )
+            gemini_key = os.environ.get("GEMINI_API_KEY")
+            if gemini_key:
+                _embed_fn = embedding_functions.GoogleGenerativeAiEmbeddingFunction(
+                    api_key=gemini_key,
+                    model_name="models/text-embedding-004"
+                )
+            else:
+                _embed_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+                    model_name="all-MiniLM-L6-v2"
+                )
             _available = True
             _seed_knowledge()
         except Exception:  # noqa: BLE001
