@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #0a0e1a;
+  color: #e5e9f0;
+  font-family: "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Frosted glass card */
+.glass {
+  background: rgba(22, 31, 54, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.glass-strong {
+  background: rgba(15, 22, 38, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+/* Ambient gradient backdrop used behind non-3D content */
+.ambient-bg {
+  background:
+    radial-gradient(1200px 600px at 20% -10%, rgba(45, 212, 191, 0.12), transparent 60%),
+    radial-gradient(900px 500px at 90% 10%, rgba(167, 139, 250, 0.12), transparent 55%),
+    #0a0e1a;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
+}
+
+/* Respect reduce-motion toggle: when body has .reduce-motion, kill transitions */
+body.reduce-motion * {
+  animation: none !important;
+  transition: none !important;
+}

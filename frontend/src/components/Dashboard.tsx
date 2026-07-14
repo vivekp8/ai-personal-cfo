@@ -1,0 +1,207 @@
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Capabilities, DashboardData } from "../api";
+import { inr, monthLabel } from "../lib/format";
+import AnimatedNumber from "./AnimatedNumber";
+import AnomaliesPanel from "./AnomaliesPanel";
+import CategoryChart from "./CategoryChart";
+import ChatPanel from "./ChatPanel";
+import DebatePanel from "./DebatePanel";
+import ErrorBoundary from "./ErrorBoundary";
+import ExplainabilityPanel from "./ExplainabilityPanel";
+import GoalPlannerPanel from "./GoalPlannerPanel";
+import MemoryPanel from "./MemoryPanel";
+import ForecastChart from "./ForecastChart";
+import HealthScorePanel from "./HealthScorePanel";
+import RetrievalPanel from "./RetrievalPanel";
+import RoutingPanel from "./RoutingPanel";
+import WorkflowPanel from "./WorkflowPanel";
+import SavingsPanel from "./SavingsPanel";
+import TwinPanel from "./TwinPanel";
+import VoiceAssistant from "./VoiceAssistant";
+import WhatIfPanel from "./WhatIfPanel";
+
+function StatCard({
+  label,
+  value,
+  accent,
+  delay,
+}: {
+  label: string;
+  value: number;
+  accent: string;
+  delay: number;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay }}
+      className="glass rounded-2xl p-4"
+    >
+      <p className="text-[11px] uppercase tracking-wider text-slate-400">{label}</p>
+      <p className="mt-1 text-2xl font-extrabold" style={{ color: accent }}>
+        <AnimatedNumber value={value} format={(n) => inr(n)} />
+      </p>
+    </motion.div>
+  );
+}
+
+export default function Dashboard({
+  data,
+  capabilities,
+}: {
+  data: DashboardData;
+  capabilities: Capabilities | null;
+}) {
+  const hs = data.health_score;
+  const ref = hs.reference_month;
+  const [voiceOpen, setVoiceOpen] = useState(false);
+
+  return (
+    <div className="ambient-bg min-h-screen">
+      <div className="mx-auto max-w-7xl px-4 py-6 md:px-6">
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="mb-4 text-sm text-slate-400"
+        >
+          Analysis based on {data.monthly_summary.months.length} months
+          {ref && ` · latest: ${monthLabel(ref)}`}
+        </motion.p>
+
+        {/* Top stat strip */}
+        <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <StatCard label="Monthly income" value={hs.income} accent="#4ade80" delay={0.05} />
+          <StatCard label="Monthly expenses" value={hs.expenses} accent="#fb923c" delay={0.1} />
+          <StatCard
+            label="Monthly surplus"
+            value={hs.income - hs.expenses}
+            accent="#2dd4bf"
+            delay={0.15}
+          />
+          <StatCard
+            label="Next month forecast"
+            value={data.forecast.total_expense_forecast}
+            accent="#a78bfa"
+            delay={0.2}
+          />
+        </div>
+
+        {/* Main grid */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          <HealthScorePanel hs={hs} delay={0.25} />
+          <div className="lg:col-span-2">
+            <CategoryChart
+              summary={data.monthly_summary}
+              transactions={data.transactions}
+              delay={0.3}
+            />
+          </div>
+
+          <div className="lg:col-span-2">
+            <ForecastChart forecast={data.forecast} delay={0.35} />
+          </div>
+          <AnomaliesPanel anomalies={data.anomalies} delay={0.4} />
+
+          <SavingsPanel suggestions={data.savings_suggestions} delay={0.45} />
+          <div className="lg:col-span-2">
+            <WhatIfPanel data={data} delay={0.5} />
+          </div>
+
+          <div className="lg:col-span-3">
+            <GoalPlannerPanel delay={0.51} />
+          </div>
+
+          <div className="lg:col-span-3">
+            <TwinPanel delay={0.52} />
+          </div>
+
+          <div className="lg:col-span-3">
+            <ExplainabilityPanel delay={0.53} />
+          </div>
+
+          <div className="lg:col-span-3">
+            <WorkflowPanel delay={0.52} />
+          </div>
+
+          <div className="lg:col-span-3">
+            <RoutingPanel delay={0.525} />
+          </div>
+
+          <div className="lg:col-span-3">
+            <RetrievalPanel delay={0.535} />
+          </div>
+
+          <div className="lg:col-span-3">
+            <MemoryPanel delay={0.54} />
+          </div>
+
+          <div className="lg:col-span-3">
+            <DebatePanel delay={0.55} />
+          </div>
+
+          <div className="lg:col-span-3">
+            <ChatPanel capabilities={capabilities} delay={0.6} />
+          </div>
+        </div>
+
+        <p className="mt-6 text-center text-xs text-slate-500">
+          All figures are computed deterministically from your statement. The AI
+          assistant explains them — it never invents numbers.
+        </p>
+      </div>
+
+      {/* Floating voice-assistant launcher */}
+      <motion.button
+        onClick={() => setVoiceOpen(true)}
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.6 }}
+        whileHover={{ scale: 1.08 }}
+        whileTap={{ scale: 0.95 }}
+        title="Talk to your CFO"
+        className="fixed bottom-6 right-6 z-40 flex h-16 w-16 items-center justify-center rounded-full border border-cyan-400/40 bg-navy-900/70 text-2xl backdrop-blur"
+        style={{ boxShadow: "0 0 20px rgba(34,211,238,0.55)" }}
+      >
+        <span
+          className="absolute inset-0 rounded-full"
+          style={{
+            background:
+              "radial-gradient(circle at 50% 50%, rgba(56,189,248,0.25), transparent 70%)",
+          }}
+        />
+        <span className="relative">🎙️</span>
+      </motion.button>
+
+      <AnimatePresence>
+        {voiceOpen && (
+          <ErrorBoundary
+            fallback={
+              <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-navy-900/95 px-6 text-center">
+                <p className="text-lg text-slate-100">
+                  The voice assistant couldn't start on this device.
+                </p>
+                <p className="mt-2 max-w-md text-sm text-slate-400">
+                  Your browser may not support WebGL/microphone access. You can
+                  still ask questions using the chat box below.
+                </p>
+                <button
+                  onClick={() => setVoiceOpen(false)}
+                  className="mt-5 rounded-xl bg-teal-accent px-5 py-2.5 text-sm font-semibold text-navy-900"
+                >
+                  Close
+                </button>
+              </div>
+            }
+          >
+            <VoiceAssistant
+              capabilities={capabilities}
+              onClose={() => setVoiceOpen(false)}
+            />
+          </ErrorBoundary>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
