@@ -90,7 +90,7 @@ def _build_langgraph():
         "categorization",
         "aggregation",
         "anomaly",
-        "forecast",
+        "forecasting",
         "health_score",
         "savings",
     ]
