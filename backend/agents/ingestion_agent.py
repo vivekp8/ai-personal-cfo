@@ -427,8 +427,10 @@ def _llm_extract_transactions(text: str) -> list[dict]:
         "array, nothing else.\n\nSTATEMENT TEXT:\n" + snippet
     )
     raw = llm_client.generate(prompt)
-    if not raw or raw.startswith("[LLM error"):
+    if not raw:
         return []
+    if raw.startswith("[LLM error"):
+        raise IngestionError(f"PDF extraction failed because the LLM encountered an error: {raw}")
     start = raw.find("[")
     end = raw.rfind("]")
     if start == -1 or end == -1 or end <= start:
