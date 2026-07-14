@@ -2,6 +2,7 @@ services:
   # Backend API (FastAPI)
   - type: web
     name: ai-personal-cfo-backend
+    plan: free
     env: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
