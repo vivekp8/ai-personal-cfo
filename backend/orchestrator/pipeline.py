@@ -86,13 +86,13 @@ def _build_langgraph():
 
     graph = StateGraph(CFOState)
     names = [
-        "ingestion",
-        "categorization",
-        "aggregation",
-        "anomaly",
-        "forecasting",
-        "health_score",
-        "savings",
+        "ingestion_node",
+        "categorization_node",
+        "aggregation_node",
+        "anomaly_node",
+        "forecast_node",
+        "health_score_node",
+        "savings_node",
     ]
     for name, fn in zip(names, _ORDER):
         graph.add_node(name, fn)
