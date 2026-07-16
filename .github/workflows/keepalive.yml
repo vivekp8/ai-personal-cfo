@@ -1,0 +1,24 @@
+name: Keep Backend Alive
+
+on:
+  schedule:
+    # Runs every 10 minutes to prevent the Render free tier from going to sleep
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allows you to run this manually from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Backend
+        run: |
+          if [ -z "${{ secrets.RENDER_BACKEND_URL }}" ]; then
+            echo "Warning: RENDER_BACKEND_URL secret is not set!"
+            echo "Please go to your GitHub Repo -> Settings -> Secrets and variables -> Actions"
+            echo "And add a new Repository Secret named RENDER_BACKEND_URL with your Render URL (e.g. https://my-backend.onrender.com)"
+            exit 0 # We exit 0 so it doesn't show a scary red 'failure' before you set it up
+          else
+            echo "Pinging backend at ${{ secrets.RENDER_BACKEND_URL }}..."
+            curl -s "${{ secrets.RENDER_BACKEND_URL }}/docs" > /dev/null
+            echo "Ping successful!"
+          fi
