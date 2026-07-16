@@ -1,38 +1,25 @@
-"""RAG layer (Phase 3): ChromaDB + sentence-transformers.
+"""Financial memory retrieval (Phase 3/4/5) using Supabase pgvector.
 
-Two persistent collections:
-  - financial_knowledge: static budgeting/finance guidance
-  - user_memory: per-user month summaries, anomalies, what-if results
-
-Performance-oriented design:
-  - The query is embedded ONCE per retrieve() and reused across collections.
-  - Collection handles are cached (no repeated get_or_create round-trips).
-  - Per-user memory is isolated with a Chroma metadata filter (server-side),
-    not a slow Python-side scan of everyone's docs.
-  - A small versioned in-process cache short-circuits repeated queries.
-  - The embedding model can be warmed up at startup via preload().
-
-Degrades gracefully: if chromadb / sentence-transformers are not installed,
-retrieval returns an empty context and the app keeps working.
+Indexes core knowledge, per-user memory, and what-ifs. Provides semantic search.
+Uses Supabase to ensure vectors persist across ephemeral container restarts on Render.
 """
 from __future__ import annotations
 
+import logging
 import os
 import threading
 from collections import OrderedDict
-from typing import Any
 
-from rag.knowledge_seed import KNOWLEDGE_DOCS
+import google.generativeai as genai
+from supabase import create_client, Client
 
-_PERSIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_store")
+from .knowledge_seed import KNOWLEDGE_DOCS
 
-_client: Any = None
-_embed_fn: Any = None
+logger = logging.getLogger("rag.retriever")
+
+_client: Client | None = None
 _available = False
 _init_lock = threading.Lock()
-
-# Cached collection handles: name -> collection.
-_collections: dict[str, Any] = {}
 
 # Versioned retrieval cache. Bumping a user's version invalidates their entries.
 _CACHE_MAX = 256
@@ -42,32 +29,27 @@ _cache_lock = threading.Lock()
 
 
 def _init() -> bool:
-    global _client, _embed_fn, _available
+    global _client, _available
     if _available:
         return True
     with _init_lock:
         if _available:
             return True
         try:
-            import chromadb
-            from chromadb.utils import embedding_functions
-        except Exception:  # noqa: BLE001
-            return False
-        try:
-            _client = chromadb.PersistentClient(path=_PERSIST_DIR)
+            supabase_url = os.environ.get("SUPABASE_URL")
+            supabase_key = os.environ.get("SUPABASE_KEY")
             gemini_key = os.environ.get("GEMINI_API_KEY")
-            if gemini_key:
-                _embed_fn = embedding_functions.GoogleGenerativeAiEmbeddingFunction(
-                    api_key=gemini_key,
-                    model_name="models/text-embedding-004"
-                )
-            else:
-                _embed_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-                    model_name="all-MiniLM-L6-v2"
-                )
+
+            if not supabase_url or not supabase_key or not gemini_key:
+                return False
+
+            genai.configure(api_key=gemini_key)
+            _client = create_client(supabase_url, supabase_key)
+
             _available = True
             _seed_knowledge()
-        except Exception:  # noqa: BLE001
+        except Exception as e:
+            logger.error("Failed to initialize Supabase RAG: %s", e)
             _available = False
     return _available
 
@@ -77,35 +59,42 @@ def is_available() -> bool:
 
 
 def preload() -> bool:
-    """Warm up Chroma + the embedding model so the first query is fast.
-
-    Safe to call from a background thread. Returns True if RAG is ready.
-    """
+    """Warm up Supabase + the embedding model so the first query is fast."""
     if not _init():
         return False
     try:
-        # Force the sentence-transformer to load its weights now.
         _embed_query("warmup")
     except Exception:  # noqa: BLE001
         return False
     return True
 
 
-def _get_collection(name: str):
-    coll = _collections.get(name)
-    if coll is None:
-        coll = _client.get_or_create_collection(name=name, embedding_function=_embed_fn)
-        _collections[name] = coll
-    return coll
-
-
-def _embed_query(query: str) -> list | None:
+def _embed_query(query: str) -> list[float] | None:
     """Embed the query once; returns a list of embeddings (or None on failure)."""
     try:
-        emb = _embed_fn([query])
-        # Normalise to plain python lists for Chroma.
-        return [list(map(float, e)) for e in emb]
-    except Exception:  # noqa: BLE001
+        response = genai.embed_content(
+            model="models/text-embedding-004",
+            content=query,
+            task_type="retrieval_query",
+        )
+        return response["embedding"]
+    except Exception as e:
+        logger.error("Failed to embed query: %s", e)
+        return None
+
+def _embed_documents(docs: list[str]) -> list[list[float]] | None:
+    """Embed multiple documents."""
+    if not docs:
+        return []
+    try:
+        response = genai.embed_content(
+            model="models/text-embedding-004",
+            content=docs,
+            task_type="retrieval_document",
+        )
+        return response["embedding"] if isinstance(response["embedding"][0], list) else [response["embedding"]]
+    except Exception as e:
+        logger.error("Failed to embed documents: %s", e)
         return None
 
 
@@ -119,19 +108,39 @@ def _bump_user(user_id: str) -> None:
 
 
 def _seed_knowledge() -> None:
-    coll = _get_collection("financial_knowledge")
-    if coll.count() >= len(KNOWLEDGE_DOCS):
+    """Seeds static knowledge if not already present."""
+    if not _client:
         return
-    ids = [f"kn_{i}" for i in range(len(KNOWLEDGE_DOCS))]
-    metadatas = [{"kind": "knowledge"} for _ in KNOWLEDGE_DOCS]
-    coll.upsert(documents=KNOWLEDGE_DOCS, ids=ids, metadatas=metadatas)
+    
+    try:
+        # Check if already seeded by querying
+        res = _client.table("memory_docs").select("id", count="exact").eq("metadata->>kind", "knowledge").execute()
+        if res.count and res.count >= len(KNOWLEDGE_DOCS):
+            return
+
+        embeddings = _embed_documents(KNOWLEDGE_DOCS)
+        if not embeddings:
+            return
+
+        records = []
+        for i, (doc, emb) in enumerate(zip(KNOWLEDGE_DOCS, embeddings)):
+            records.append({
+                "id": f"kn_{i}",
+                "content": doc,
+                "embedding": emb,
+                "metadata": {"kind": "knowledge"}
+            })
+        
+        _client.table("memory_docs").upsert(records).execute()
+    except Exception as e:
+        logger.error("Failed to seed knowledge: %s", e)
 
 
 def index_user_memory(user_id: str, state: dict) -> None:
     """Auto-generate and embed per-user documents after processing."""
-    if not _init():
+    if not _init() or not _client:
         return
-    coll = _get_collection("user_memory")
+    
     docs: list[str] = []
     ids: list[str] = []
     metadatas: list[dict] = []
@@ -168,35 +177,42 @@ def index_user_memory(user_id: str, state: dict) -> None:
         )
 
     if docs:
-        coll.upsert(documents=docs, ids=ids, metadatas=metadatas)
-        _bump_user(user_id)
+        embeddings = _embed_documents(docs)
+        if embeddings:
+            records = [{"id": _id, "content": doc, "embedding": emb, "metadata": meta} 
+                       for _id, doc, emb, meta in zip(ids, docs, embeddings, metadatas)]
+            _client.table("memory_docs").upsert(records).execute()
+            _bump_user(user_id)
 
 
 def index_memory_items(user_id: str, items: list[dict]) -> None:
-    """Embed long-term memory items for semantic recall (Phase 5).
-
-    Each item: {"id": str, "text": str, "kind": str}. No-op if RAG unavailable.
-    """
-    if not _init() or not items:
+    """Embed long-term memory items for semantic recall (Phase 5)."""
+    if not _init() or not items or not _client:
         return
-    coll = _get_collection("user_memory")
+    
     docs, ids, metadatas = [], [], []
     for it in items:
         text = (it.get("text") or "").strip()
         if not text:
             continue
-        docs.append(f"[{user_id}] {text}")
+        doc_str = f"[{user_id}] {text}"
+        docs.append(doc_str)
         ids.append(f"{user_id}_mem_{it.get('id')}")
         metadatas.append({"user_id": user_id, "kind": it.get("kind", "memory")})
+        
     if docs:
-        coll.upsert(documents=docs, ids=ids, metadatas=metadatas)
-        _bump_user(user_id)
+        embeddings = _embed_documents(docs)
+        if embeddings:
+            records = [{"id": _id, "content": doc, "embedding": emb, "metadata": meta} 
+                       for _id, doc, emb, meta in zip(ids, docs, embeddings, metadatas)]
+            _client.table("memory_docs").upsert(records).execute()
+            _bump_user(user_id)
 
 
 def index_whatif(user_id: str, whatif: dict) -> None:
-    if not _init():
+    if not _init() or not _client:
         return
-    coll = _get_collection("user_memory")
+    
     full = whatif["pay_full"]
     emi = whatif["emi"]
     doc = (
@@ -204,76 +220,51 @@ def index_whatif(user_id: str, whatif: dict) -> None:
         f"pay-full score {full['health_score']}, EMI score {emi['health_score']} "
         f"(EMI Rs.{emi['emi_monthly']:,.0f}/mo over {whatif['tenure_months']} months)."
     )
-    coll.upsert(
-        documents=[doc],
-        ids=[f"{user_id}_whatif_latest"],
-        metadatas=[{"user_id": user_id, "kind": "whatif"}],
-    )
-    _bump_user(user_id)
+    
+    embeddings = _embed_documents([doc])
+    if embeddings:
+        records = [{
+            "id": f"{user_id}_whatif_latest",
+            "content": doc,
+            "embedding": embeddings[0],
+            "metadata": {"user_id": user_id, "kind": "whatif"}
+        }]
+        _client.table("memory_docs").upsert(records).execute()
+        _bump_user(user_id)
 
 
-def _query_knowledge(q_emb: list | None, query: str, k: int) -> list[tuple[str, float]]:
-    coll = _get_collection("financial_knowledge")
+def _query_knowledge(q_emb: list[float] | None, k: int) -> list[tuple[str, float]]:
+    if q_emb is None or not _client:
+        return []
     try:
-        if q_emb is not None:
-            res = coll.query(
-                query_embeddings=q_emb, n_results=k, include=["documents", "distances"]
-            )
-        else:
-            res = coll.query(
-                query_texts=[query], n_results=k, include=["documents", "distances"]
-            )
-        docs = res.get("documents", [[]])[0]
-        dists = res.get("distances", [[]])[0] or [0.0] * len(docs)
-        return list(zip(docs, dists))
+        res = _client.rpc("match_memories", {
+            "query_embedding": q_emb,
+            "match_threshold": 0.0,
+            "match_count": k,
+            "filter_metadata": {"kind": "knowledge"}
+        }).execute()
+        return [(match['content'], match['similarity']) for match in res.data]
     except Exception:  # noqa: BLE001
         return []
 
 
-def _query_memory(
-    q_emb: list | None, query: str, user_id: str, k: int
-) -> list[tuple[str, float]]:
-    coll = _get_collection("user_memory")
-
-    def run(where: dict | None):
-        if q_emb is not None:
-            return coll.query(
-                query_embeddings=q_emb,
-                n_results=k,
-                where=where,
-                include=["documents", "distances"],
-            )
-        return coll.query(
-            query_texts=[query],
-            n_results=k,
-            where=where,
-            include=["documents", "distances"],
-        )
-
+def _query_memory(q_emb: list[float] | None, user_id: str, k: int) -> list[tuple[str, float]]:
+    if q_emb is None or not _client:
+        return []
     try:
-        # Server-side isolation by user metadata (fast + correct).
-        res = run({"user_id": user_id})
-        docs = res.get("documents", [[]])[0]
-        if not docs:
-            # Backward-compat: older docs have no metadata — fall back to a
-            # broader query filtered by the user tag embedded in the text.
-            res = run(None)
-            docs = res.get("documents", [[]])[0]
-            dists = res.get("distances", [[]])[0] or [0.0] * len(docs)
-            return [(d, dist) for d, dist in zip(docs, dists) if f"[{user_id}]" in d]
-        dists = res.get("distances", [[]])[0] or [0.0] * len(docs)
-        return list(zip(docs, dists))
+        res = _client.rpc("match_memories", {
+            "query_embedding": q_emb,
+            "match_threshold": 0.0,
+            "match_count": k,
+            "filter_metadata": {"user_id": user_id}
+        }).execute()
+        return [(match['content'], match['similarity']) for match in res.data]
     except Exception:  # noqa: BLE001
         return []
 
 
 def retrieve(query: str, user_id: str, k: int = 3) -> dict:
-    """Return {context, sources, available} for a query.
-
-    Embeds the query once, retrieves top-k from each collection, then merges
-    and de-duplicates results ranked by distance. Results are cached per
-    (user, query) and invalidated when the user's memory changes.
-    """
+    """Return {context, sources, available} for a query."""
     if not _init():
         return {"context": "", "sources": [], "available": False}
 
@@ -286,17 +277,17 @@ def retrieve(query: str, user_id: str, k: int = 3) -> dict:
             return hit
 
     q_emb = _embed_query(query)
-    knowledge = _query_knowledge(q_emb, query, k)
-    memory = _query_memory(q_emb, query, user_id, k)
+    knowledge = _query_knowledge(q_emb, k)
+    memory = _query_memory(q_emb, user_id, k)
 
-    # Merge, de-duplicate, and rank by ascending distance (closer = better).
+    # Merge, de-duplicate, and rank by descending similarity (higher = better).
     seen: set[str] = set()
     ranked: list[tuple[str, float]] = []
-    for doc, dist in sorted(knowledge + memory, key=lambda x: x[1]):
+    for doc, score in sorted(knowledge + memory, key=lambda x: x[1], reverse=True):
         if doc in seen:
             continue
         seen.add(doc)
-        ranked.append((doc, dist))
+        ranked.append((doc, score))
 
     sources = [doc for doc, _ in ranked]
     context = "\n".join(f"- {s}" for s in sources)
@@ -316,7 +307,6 @@ def retrieve(query: str, user_id: str, k: int = 3) -> dict:
 # --------------------------------------------------------------------------- #
 def _cosine(a, b) -> float:
     import numpy as np
-
     va, vb = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
     na, nb = np.linalg.norm(va), np.linalg.norm(vb)
     if na == 0 or nb == 0:
@@ -325,19 +315,12 @@ def _cosine(a, b) -> float:
 
 
 def _project_3d(query_emb: list, chunk_embs: list[list]) -> tuple[list, list[list]]:
-    """Project the query + chunk embeddings into 3D for visualization.
-
-    Uses PCA when there are enough points; otherwise pads the first dims. Always
-    returns coordinates scaled to a pleasant [-3, 3] range.
-    """
     import numpy as np
-
     mat = np.asarray([query_emb] + chunk_embs, dtype=float)
     n, d = mat.shape
     if n >= 4 and d >= 3:
         try:
             from sklearn.decomposition import PCA
-
             coords = PCA(n_components=3).fit_transform(mat)
         except Exception:  # noqa: BLE001
             coords = mat[:, :3]
@@ -345,113 +328,87 @@ def _project_3d(query_emb: list, chunk_embs: list[list]) -> tuple[list, list[lis
         coords = np.zeros((n, 3))
         coords[:, : min(3, d)] = mat[:, : min(3, d)]
 
-    # Scale to [-3, 3] per axis for stable framing in the 3D scene.
     mn, mx = coords.min(axis=0), coords.max(axis=0)
     span = np.where((mx - mn) == 0, 1.0, (mx - mn))
-    scaled = (coords - mn) / span * 6.0 - 3.0
-    return scaled[0].tolist(), [row.tolist() for row in scaled[1:]]
+    coords = ((coords - mn) / span) * 6.0 - 3.0
+    
+    coords_list = coords.tolist()
+    return coords_list[0], coords_list[1:]
 
 
-def _query_with_embeddings(collection: str, q_emb: list, k: int, where: dict | None):
-    coll = _get_collection(collection)
+def visualize_retrieval(query: str, user_id: str, k: int = 3) -> dict | None:
+    """Return a point cloud representation of the latest query."""
+    if not _init() or not _client:
+        return None
+
+    q_emb = _embed_query(query)
+    if q_emb is None:
+        return None
+
+    # Fetch knowledge chunks with values. Supabase returns vector as string. We need to convert it.
     try:
-        return coll.query(
-            query_embeddings=q_emb,
-            n_results=k,
-            where=where,
-            include=["documents", "distances", "embeddings", "metadatas"],
-        )
-    except Exception:  # noqa: BLE001
-        return {}
+        res_k = _client.rpc("match_memories", {
+            "query_embedding": q_emb,
+            "match_threshold": 0.0,
+            "match_count": k,
+            "filter_metadata": {"kind": "knowledge"}
+        }).execute()
+        
+        res_m = _client.rpc("match_memories", {
+            "query_embedding": q_emb,
+            "match_threshold": 0.0,
+            "match_count": k,
+            "filter_metadata": {"user_id": user_id}
+        }).execute()
+    except Exception:
+        return None
 
+    matches = res_k.data + res_m.data
+    if not matches:
+        return None
 
-def retrieve_trace(query: str, user_id: str, k: int = 4) -> dict:
-    """Full, explainable retrieval trace for the RAG visualiser.
+    # To get raw embeddings for visualization, we need another query to pull the 'embedding' column
+    # since our RPC doesn't return the raw vector to save bandwidth.
+    ids_to_fetch = [m['id'] for m in matches]
+    try:
+        vec_res = _client.table("memory_docs").select("id, embedding").in_("id", ids_to_fetch).execute()
+        vec_map = {row['id']: row['embedding'] for row in vec_res.data}
+    except Exception:
+        return None
 
-    Returns the query, embedding metadata, every retrieved chunk with its
-    cosine similarity + rank + 3D coordinates, the query's 3D point, and the
-    final assembled context. Never raises — returns available=False if RAG is off.
-    """
-    if not _init():
-        return {"available": False, "reason": "RAG (chromadb) not available."}
+    # Deduplicate matches
+    seen = set()
+    unique_matches = []
+    for m in sorted(matches, key=lambda x: x['similarity'], reverse=True):
+        text = m.get('content', '')
+        if text not in seen and m['id'] in vec_map:
+            seen.add(text)
+            unique_matches.append(m)
 
-    q_emb_list = _embed_query(query)
-    if not q_emb_list:
-        return {"available": False, "reason": "Could not embed the query."}
-    q_emb = q_emb_list[0]
+    if not unique_matches:
+        return None
 
-    raw: list[dict] = []
-    for coll_name, where in (
-        ("financial_knowledge", None),
-        ("user_memory", {"user_id": user_id}),
-    ):
-        res = _query_with_embeddings(coll_name, [q_emb], k, where)
+    def _parse_vec(v):
+        if isinstance(v, str):
+            # pgvector format: "[0.1, 0.2, ...]"
+            import ast
+            return ast.literal_eval(v)
+        return v
 
-        # Chroma may return numpy arrays; avoid boolean checks on arrays.
-        def _first(value):
-            if value is None:
-                return None
-            try:
-                inner = value[0]
-            except (IndexError, TypeError, KeyError):
-                return None
-            return inner
+    chunk_embs = [_parse_vec(vec_map[m['id']]) for m in unique_matches]
+    q3, c3 = _project_3d(q_emb, chunk_embs)
 
-        docs = _first(res.get("documents"))
-        docs = list(docs) if docs is not None else []
-        dists = _first(res.get("distances"))
-        dists = list(dists) if dists is not None else [0.0] * len(docs)
-        embs = _first(res.get("embeddings"))
-        embs = list(embs) if embs is not None else [[] for _ in docs]
-
-        for i, doc in enumerate(docs):
-            if not doc:
-                continue
-            dist = float(dists[i]) if i < len(dists) else 0.0
-            emb = list(embs[i]) if i < len(embs) and embs[i] is not None else []
-            raw.append({
-                "text": doc,
-                "collection": coll_name,
-                "distance": round(dist, 4),
-                "similarity": round(max(0.0, _cosine(q_emb, emb)), 4) if len(emb) else 0.0,
-                "embedding": emb,
-            })
-
-    # De-duplicate by text, keep the highest similarity instance.
-    best: dict[str, dict] = {}
-    for c in raw:
-        if c["text"] not in best or c["similarity"] > best[c["text"]]["similarity"]:
-            best[c["text"]] = c
-    chunks = sorted(best.values(), key=lambda c: c["similarity"], reverse=True)
-
-    # 3D projection of query + chunks.
-    query_point = [0.0, 0.0, 0.0]
-    if chunks:
-        query_point, points = _project_3d(q_emb, [c["embedding"] for c in chunks])
-        for c, p in zip(chunks, points):
-            c["point"] = p
-
-    # Assign ranks and drop the raw embedding vectors from the payload.
-    for i, c in enumerate(chunks):
-        c["rank"] = i + 1
-        c.pop("embedding", None)
-
-    top = chunks[:k]
-    final_context = "\n".join(f"- {c['text']}" for c in top)
+    chunks = []
+    for m, c3_coord in zip(unique_matches, c3):
+        chunks.append({
+            "text": m.get('content', ''),
+            "score": m.get('similarity', 0.0),
+            "pos": c3_coord,
+            "kind": m.get('metadata', {}).get('kind', 'unknown'),
+        })
 
     return {
-        "available": True,
         "query": query,
-        "embedding": {
-            "model": "all-MiniLM-L6-v2",
-            "dimension": len(q_emb),
-            "query_point": query_point,
-        },
+        "query_pos": q3,
         "chunks": chunks,
-        "top_k": len(top),
-        "final_context": final_context,
-        "stages": [
-            "Question", "Embedding", "Retrieved Chunks",
-            "Similarity Score", "Ranking", "Final Context", "LLM Response",
-        ],
     }
