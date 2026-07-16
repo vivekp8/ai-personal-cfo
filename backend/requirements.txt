@@ -26,7 +26,7 @@ langchain-core==0.3.21
 langgraph==0.2.53
 
 # Multi-provider LLM layer (async HTTP transport for all providers)
-httpx==0.28.1
+httpx==0.27.2
 # Optional cache backend — only needed if REDIS_URL is set:
 #   pip install redis
 # redis==5.2.0
