@@ -9,7 +9,7 @@ import io
 import os
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -238,7 +238,7 @@ _FORMAT_LABELS = {
 }
 
 
-def _process_csv(content: str | bytes, user_id: str, filename: str | None = None) -> dict:
+def _process_csv(content: str | bytes, user_id: str, filename: str | None = None, background_tasks: BackgroundTasks | None = None) -> dict:
     from orchestrator.pipeline import run_pipeline_traced
     from orchestrator.trace import WorkflowTracer
 
@@ -274,10 +274,17 @@ def _process_csv(content: str | bytes, user_id: str, filename: str | None = None
             return 0
 
     tracer.step("persist", _persist, detail_fn=lambda _o: "saved")
-    tracer.step(
-        "memory", _remember,
-        detail_fn=lambda n: f"{n} facts remembered" if isinstance(n, int) else "indexed",
-    )
+    if background_tasks:
+        background_tasks.add_task(_remember)
+        tracer.step(
+            "memory", lambda: "deferred",
+            detail_fn=lambda _: "indexing in background",
+        )
+    else:
+        tracer.step(
+            "memory", _remember,
+            detail_fn=lambda n: f"{n} facts remembered" if isinstance(n, int) else "indexed",
+        )
 
     result["workflow"] = {
         "trace": tracer.as_list(),
@@ -296,7 +303,7 @@ _SUPPORTED_EXTS = {"csv", "tsv", "txt", "xlsx", "xlsm", "xls", "ods", "json", "p
 
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...), user_id: str = Form(DEFAULT_USER)) -> dict:
+async def upload(background_tasks: BackgroundTasks, file: UploadFile = File(...), user_id: str = Form(DEFAULT_USER)) -> dict:
     name = (file.filename or "").strip()
     ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
     if ext and ext not in _SUPPORTED_EXTS:
@@ -312,7 +319,7 @@ async def upload(file: UploadFile = File(...), user_id: str = Form(DEFAULT_USER)
     if not raw:
         raise HTTPException(status_code=400, detail="The uploaded file is empty.")
     # Pass raw bytes through; the ingestion layer decodes/decodes per format.
-    return _process_csv(raw, user_id, filename=name or "upload.csv")
+    return _process_csv(raw, user_id, filename=name or "upload.csv", background_tasks=background_tasks)
 
 
 @app.get("/samples")
@@ -327,7 +334,7 @@ def list_samples() -> dict:
 
 
 @app.post("/load-sample")
-def load_sample(name: str = Form(...), user_id: str = Form(DEFAULT_USER)) -> dict:
+def load_sample(background_tasks: BackgroundTasks, name: str = Form(...), user_id: str = Form(DEFAULT_USER)) -> dict:
     safe = os.path.basename(name)
     path = os.path.join(_SAMPLES_DIR, safe)
     if not os.path.isfile(path):
@@ -335,7 +342,7 @@ def load_sample(name: str = Form(...), user_id: str = Form(DEFAULT_USER)) -> dic
     with open(path, "r", encoding="utf-8-sig") as fh:
         content = fh.read()
     # Pass the sample's filename so the workflow reports the real format.
-    return _process_csv(content, user_id, filename=safe)
+    return _process_csv(content, user_id, filename=safe, background_tasks=background_tasks)
 
 
 def _require_result(user_id: str) -> dict:
