@@ -473,37 +473,38 @@ def _parse_pdf(content: bytes) -> list[dict]:
     try:
         with pdfplumber.open(io.BytesIO(content)) as pdf:
             page_count = len(pdf.pages)
-            # 1) FAST PATH: text extraction (cheap) + heuristic line parsing.
+            
+            # 1) PRIMARY PATH: structured table detection
+            logger.info("Trying PDF table detection (slow but accurate)...")
+            tables = _pdf_extract_tables(pdf)
+            df = _tables_to_df(tables)
+            if df is not None:
+                try:
+                    txns = _dataframe_to_transactions(df)
+                    if len(txns) > 0:
+                        logger.info(
+                            "PDF parsed via tables in %.0fms (%d txns)",
+                            (time.perf_counter() - started) * 1000, len(txns),
+                        )
+                        return txns
+                except IngestionError:
+                    pass
+
+            # 2) FAST TEXT PATH: text extraction + heuristic line parsing
+            logger.info("Table detection insufficient; trying text heuristics...")
             text = _pdf_extract_text(pdf)
             if text.strip():
                 txns = _parse_pdf_text(text)
-                if len(txns) >= 2:
+                # Only trust it if we found a reasonable number of transactions
+                if len(txns) >= max(3, page_count):
                     logger.info(
                         "PDF parsed via text in %.0fms (%d pages, %d txns)",
                         (time.perf_counter() - started) * 1000, page_count, len(txns),
                     )
                     return txns
 
-            # 2) SLOW PATH: structured table detection — only when text failed.
-            logger.info(
-                "PDF text path insufficient after %.0fms; trying table detection",
-                (time.perf_counter() - started) * 1000,
-            )
-            tables = _pdf_extract_tables(pdf)
-            df = _tables_to_df(tables)
     except Exception as exc:  # noqa: BLE001
         raise IngestionError(f"Could not read the PDF: {exc}") from exc
-
-    if df is not None:
-        try:
-            txns = _dataframe_to_transactions(df)
-            logger.info(
-                "PDF parsed via tables in %.0fms (%d txns)",
-                (time.perf_counter() - started) * 1000, len(txns),
-            )
-            return txns
-        except IngestionError:
-            pass  # fall through to LLM fallback
 
     # 3) LLM-assisted extraction for irregular layouts (network — last resort).
     if text.strip():
