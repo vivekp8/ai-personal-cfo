@@ -432,10 +432,11 @@ def _llm_extract_transactions(text: str) -> list[dict]:
     if current_chunk:
         chunks.append("\n".join(current_chunk))
 
-    out: list[dict] = []
-    for snippet in chunks:
+    import concurrent.futures
+
+    def process_chunk(snippet: str) -> list[dict]:
         if not snippet.strip():
-            continue
+            return []
         prompt = (
             "You are a precise bank-statement parser. Extract EVERY transaction from "
             "the statement text below into a JSON array. Each element must be exactly:\n"
@@ -447,7 +448,7 @@ def _llm_extract_transactions(text: str) -> list[dict]:
         )
         raw = llm_client.generate(prompt)
         if not raw or raw.startswith("[LLM error"):
-            continue
+            return []
             
         data = []
         start = raw.find("[")
@@ -467,6 +468,7 @@ def _llm_extract_transactions(text: str) -> list[dict]:
                 except Exception:
                     pass
 
+        chunk_out = []
         for item in data if isinstance(data, list) else []:
             if not isinstance(item, dict):
                 continue
@@ -477,7 +479,15 @@ def _llm_extract_transactions(text: str) -> list[dict]:
             except (ValueError, TypeError):
                 continue
             if desc:
-                out.append({"date": date, "description": desc, "amount": amount})
+                chunk_out.append({"date": date, "description": desc, "amount": amount})
+        return chunk_out
+
+    out: list[dict] = []
+    # Process all chunks in parallel (up to 10 concurrently) to prevent HTTP timeouts
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        results = executor.map(process_chunk, chunks)
+        for res in results:
+            out.extend(res)
 
     out.sort(key=lambda t: t["date"])
     return out
