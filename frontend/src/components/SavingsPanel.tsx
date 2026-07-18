@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { SavingsSuggestion } from "../api";
-import { inr } from "../lib/format";
+import { formatCurrency } from "../lib/format";
 import GlassCard from "./GlassCard";
 
 export default function SavingsPanel({
@@ -15,7 +15,7 @@ export default function SavingsPanel({
   return (
     <GlassCard
       title="Savings Opportunities"
-      subtitle={total ? `Up to ${inr(total)}/mo potential` : "Looking good"}
+      subtitle={total ? `Up to ${formatCurrency(total)}/mo potential` : "Looking good"}
       delay={delay}
     >
       {suggestions.length === 0 ? (
@@ -36,7 +36,7 @@ export default function SavingsPanel({
                 <p className="text-sm font-semibold text-teal-accent">{s.title}</p>
                 {s.monthly_savings > 0 && (
                   <span className="rounded-md bg-teal-accent/15 px-2 py-0.5 text-xs font-semibold text-teal-accent">
-                    ~{inr(s.monthly_savings)}/mo
+                    ~{formatCurrency(s.monthly_savings)}/mo
                   </span>
                 )}
               </div>

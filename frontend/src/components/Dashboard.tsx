@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Capabilities, DashboardData } from "../api";
-import { inr, monthLabel } from "../lib/format";
+import { formatCurrency, monthLabel } from "../lib/format";
 import AnimatedNumber from "./AnimatedNumber";
 import AnomaliesPanel from "./AnomaliesPanel";
 import CategoryChart from "./CategoryChart";
@@ -26,11 +26,13 @@ function StatCard({
   value,
   accent,
   delay,
+  currency,
 }: {
   label: string;
   value: number;
   accent: string;
   delay: number;
+  currency: string;
 }) {
   return (
     <motion.div
@@ -41,11 +43,20 @@ function StatCard({
     >
       <p className="text-[11px] uppercase tracking-wider text-slate-400">{label}</p>
       <p className="mt-1 text-2xl font-extrabold" style={{ color: accent }}>
-        <AnimatedNumber value={value} format={(n) => inr(n)} />
+        <AnimatedNumber value={value} format={(n) => formatCurrency(n, { currency })} />
       </p>
     </motion.div>
   );
 }
+
+type Tab = "overview" | "planning" | "copilot" | "diagnostics";
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "planning", label: "Planning" },
+  { id: "copilot", label: "AI Copilot" },
+  { id: "diagnostics", label: "Diagnostics" },
+];
 
 export default function Dashboard({
   data,
@@ -57,6 +68,7 @@ export default function Dashboard({
   const hs = data.health_score;
   const ref = hs.reference_month;
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>("overview");
 
   return (
     <div className="ambient-bg min-h-screen">
@@ -74,80 +86,131 @@ export default function Dashboard({
           {ref && ` · latest: ${monthLabel(ref)}`}
         </motion.p>
 
-        {/* Top stat strip */}
-        <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-          <StatCard label="Avg Monthly Income" value={hs.income} accent="#4ade80" delay={0.05} />
-          <StatCard label="Avg Monthly Expenses" value={hs.expenses} accent="#fb923c" delay={0.1} />
-          <StatCard
-            label="Avg Monthly Surplus"
-            value={hs.income - hs.expenses}
-            accent="#2dd4bf"
-            delay={0.15}
-          />
-          <StatCard
-            label="Next month forecast"
-            value={data.forecast.total_expense_forecast}
-            accent="#a78bfa"
-            delay={0.2}
-          />
+        {/* Tabs */}
+        <div className="mb-6 flex space-x-2 overflow-x-auto rounded-xl bg-navy-800/50 p-1 backdrop-blur-sm sm:w-fit">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`relative whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === tab.id ? "text-navy-900" : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              {activeTab === tab.id && (
+                <motion.div
+                  layoutId="active-tab"
+                  className="absolute inset-0 rounded-lg bg-teal-400"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10">{tab.label}</span>
+            </button>
+          ))}
         </div>
+
+        {/* Top stat strip - only visible on Overview */}
+        <AnimatePresence mode="popLayout">
+          {activeTab === "overview" && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4"
+            >
+              <StatCard label="Avg Monthly Income" value={hs.income} accent="#4ade80" delay={0.05} currency={data.monthly_summary.dominant_currency} />
+              <StatCard label="Avg Monthly Expenses" value={hs.expenses} accent="#fb923c" delay={0.1} currency={data.monthly_summary.dominant_currency} />
+              <StatCard
+                label="Avg Monthly Surplus"
+                value={hs.income - hs.expenses}
+                accent="#2dd4bf"
+                delay={0.15}
+                currency={data.monthly_summary.dominant_currency}
+              />
+              <StatCard
+                label="Next month forecast"
+                value={data.forecast.total_expense_forecast}
+                accent="#a78bfa"
+                delay={0.2}
+                currency={data.monthly_summary.dominant_currency}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Main grid */}
         <div className="grid gap-4 lg:grid-cols-3">
-          <HealthScorePanel hs={hs} delay={0.25} />
-          <div className="lg:col-span-2">
-            <CategoryChart
-              summary={data.monthly_summary}
-              transactions={data.transactions}
-              delay={0.3}
-            />
-          </div>
+          {activeTab === "overview" && (
+            <>
+              <HealthScorePanel hs={hs} delay={0.25} />
+              <div className="lg:col-span-2">
+                <CategoryChart
+                  summary={data.monthly_summary}
+                  transactions={data.transactions}
+                  delay={0.3}
+                />
+              </div>
 
-          <div className="lg:col-span-2">
-            <ForecastChart forecast={data.forecast} delay={0.35} />
-          </div>
-          <AnomaliesPanel anomalies={data.anomalies} delay={0.4} />
+              <div className="lg:col-span-2">
+                <ForecastChart forecast={data.forecast} delay={0.35} />
+              </div>
+              <AnomaliesPanel anomalies={data.anomalies} delay={0.4} />
 
-          <SavingsPanel suggestions={data.savings_suggestions} delay={0.45} />
-          <div className="lg:col-span-2">
-            <WhatIfPanel data={data} delay={0.5} />
-          </div>
+              <SavingsPanel suggestions={data.savings_suggestions} delay={0.45} />
+            </>
+          )}
 
-          <div className="lg:col-span-3">
-            <GoalPlannerPanel delay={0.51} />
-          </div>
+          {activeTab === "planning" && (
+            <>
+              <div className="lg:col-span-3">
+                <GoalPlannerPanel delay={0.1} />
+              </div>
 
-          <div className="lg:col-span-3">
-            <TwinPanel delay={0.52} />
-          </div>
+              <div className="lg:col-span-3">
+                <WhatIfPanel data={data} delay={0.2} />
+              </div>
 
-          <div className="lg:col-span-3">
-            <ExplainabilityPanel delay={0.53} />
-          </div>
+              <div className="lg:col-span-3">
+                <TwinPanel delay={0.3} />
+              </div>
+            </>
+          )}
 
-          <div className="lg:col-span-3">
-            <WorkflowPanel delay={0.52} />
-          </div>
+          {activeTab === "copilot" && (
+            <>
+              <div className="lg:col-span-3">
+                <ChatPanel capabilities={capabilities} delay={0.1} />
+              </div>
+            </>
+          )}
 
-          <div className="lg:col-span-3">
-            <RoutingPanel delay={0.525} />
-          </div>
+          {activeTab === "diagnostics" && (
+            <>
+              <div className="lg:col-span-3">
+                <ExplainabilityPanel delay={0.1} />
+              </div>
 
-          <div className="lg:col-span-3">
-            <RetrievalPanel delay={0.535} />
-          </div>
+              <div className="lg:col-span-3">
+                <WorkflowPanel delay={0.2} />
+              </div>
 
-          <div className="lg:col-span-3">
-            <MemoryPanel delay={0.54} />
-          </div>
+              <div className="lg:col-span-3">
+                <RoutingPanel delay={0.3} />
+              </div>
 
-          <div className="lg:col-span-3">
-            <DebatePanel delay={0.55} />
-          </div>
+              <div className="lg:col-span-3">
+                <RetrievalPanel delay={0.4} />
+              </div>
 
-          <div className="lg:col-span-3">
-            <ChatPanel capabilities={capabilities} delay={0.6} />
-          </div>
+              <div className="lg:col-span-3">
+                <MemoryPanel delay={0.5} />
+              </div>
+
+              <div className="lg:col-span-3">
+                <DebatePanel delay={0.6} />
+              </div>
+            </>
+          )}
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-500">

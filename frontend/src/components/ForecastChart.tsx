@@ -10,7 +10,7 @@ import {
   ReferenceDot,
 } from "recharts";
 import { Forecast } from "../api";
-import { inr, monthLabel } from "../lib/format";
+import { formatCurrency, monthLabel } from "../lib/format";
 import GlassCard from "./GlassCard";
 
 export default function ForecastChart({
@@ -41,7 +41,7 @@ export default function ForecastChart({
   return (
     <GlassCard
       title="Expense Forecast"
-      subtitle={`Next month (${monthLabel(forecast.next_month)}) projected at ${inr(
+      subtitle={`Next month (${monthLabel(forecast.next_month)}) projected at ${formatCurrency(
         forecast.total_expense_forecast
       )}`}
       delay={delay}
@@ -54,10 +54,10 @@ export default function ForecastChart({
             <YAxis
               stroke="#94a3b8"
               fontSize={11}
-              tickFormatter={(v) => inr(v, { compact: true })}
+              tickFormatter={(v) => formatCurrency(v, { compact: true })}
             />
             <Tooltip
-              formatter={(v: number) => inr(v)}
+              formatter={(v: number) => formatCurrency(v)}
               contentStyle={{
                 background: "rgba(15,22,38,0.95)",
                 border: "1px solid rgba(148,163,184,0.2)",

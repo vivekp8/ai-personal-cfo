@@ -1,19 +1,17 @@
 // Formatting helpers (Indian rupee / number formatting).
 
-export function inr(value: number, opts: { compact?: boolean } = {}): string {
+export function formatCurrency(value: number, opts: { compact?: boolean, currency?: string } = {}): string {
+  const curSymbol = opts.currency || "Rs.";
+  // We format using en-US but custom prefix since dynamic currencies might not map perfectly to Intl codes
+  const numOpts: Intl.NumberFormatOptions = {
+    maximumFractionDigits: opts.compact ? 1 : 0,
+    minimumFractionDigits: 0,
+  };
   if (opts.compact) {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 1,
-      notation: "compact",
-    }).format(value);
+    numOpts.notation = "compact";
   }
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(value);
+  const formatted = new Intl.NumberFormat("en-US", numOpts).format(value);
+  return `${curSymbol} ${formatted}`;
 }
 
 export function pct(value: number): string {

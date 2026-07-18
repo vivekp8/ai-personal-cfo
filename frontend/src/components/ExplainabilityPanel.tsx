@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ExplanationCard, explainSubject } from "../api";
-import { inr } from "../lib/format";
+import { formatCurrency } from "../lib/format";
 import GlassCard from "./GlassCard";
 
 const SUBJECTS: { id: string; label: string; icon: string }[] = [
@@ -161,7 +161,7 @@ export default function ExplainabilityPanel({ delay = 0 }: { delay?: number }) {
                         <span
                           className={t.amount < 0 ? "text-rose-300" : "text-emerald-300"}
                         >
-                          {inr(t.amount)}
+                          {formatCurrency(t.amount)}
                         </span>
                       </li>
                     ))}

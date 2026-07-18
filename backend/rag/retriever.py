@@ -289,7 +289,7 @@ def retrieve(query: str, user_id: str, k: int = 3) -> dict:
         seen.add(doc)
         ranked.append((doc, score))
 
-    sources = [doc for doc, _ in ranked]
+    sources = [doc for doc, _ in ranked][:k]
     context = "\n".join(f"- {s}" for s in sources)
     result = {"context": context, "sources": sources, "available": True}
 

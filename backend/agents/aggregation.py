@@ -31,6 +31,10 @@ def aggregate_monthly(categorized: list[dict]) -> dict:
     start_date = None
     end_date = None
 
+    from collections import Counter
+    currencies = Counter()
+    payment_methods = defaultdict(float)
+
     for txn in categorized:
         month = _month_key(txn["date"])
         cat = txn["category"]
@@ -41,6 +45,13 @@ def aggregate_monthly(categorized: list[dict]) -> dict:
             start_date = txn["date"]
         if not end_date or txn["date"] > end_date:
             end_date = txn["date"]
+            
+        if "currency" in txn and txn["currency"]:
+            currencies[txn["currency"]] += 1
+            
+        if "payment_method" in txn and txn["payment_method"]:
+            if amt < 0:
+                payment_methods[txn["payment_method"]] += abs(amt)
             
         by_month_category[month][cat] += amt
         if amt > 0 or cat == "Income":
@@ -57,6 +68,10 @@ def aggregate_monthly(categorized: list[dict]) -> dict:
         d1 = datetime.strptime(start_date, "%Y-%m-%d")
         d2 = datetime.strptime(end_date, "%Y-%m-%d")
         duration_days = (d2 - d1).days + 1
+        
+    dominant_currency = "Rs."
+    if currencies:
+        dominant_currency = currencies.most_common(1)[0][0]
 
     return {
         "timeline": {
@@ -64,6 +79,8 @@ def aggregate_monthly(categorized: list[dict]) -> dict:
             "end_date": end_date or "",
             "duration_days": duration_days
         },
+        "dominant_currency": dominant_currency,
+        "payment_methods": {k: round(v, 2) for k, v in payment_methods.items()},
         "months": months,
         "by_month_category": {m: dict(by_month_category[m]) for m in months},
         "monthly_income": {m: round(monthly_income[m], 2) for m in months},

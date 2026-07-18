@@ -299,7 +299,7 @@ def _process_csv(content: str | bytes, user_id: str, filename: str | None = None
 
 
 # ---------- Phase 1 ----------
-_SUPPORTED_EXTS = {"csv", "tsv", "txt", "xlsx", "xlsm", "xls", "ods", "json", "pdf"}
+_SUPPORTED_EXTS = {"csv", "tsv", "txt", "xlsx", "xlsm", "xls", "ods", "json", "pdf", "png", "jpg", "jpeg", "webp"}
 
 
 @app.post("/upload")

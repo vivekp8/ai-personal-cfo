@@ -77,12 +77,13 @@ def _find_column(columns: list[str], candidates: set[str]) -> str | None:
     return None
 
 
-def _parse_amount(raw: Any) -> float:
+def _parse_amount(raw: Any) -> tuple[float, str]:
     if raw is None:
         raise ValueError("empty amount")
     s = str(raw).strip()
     if s == "" or s.lower() in {"nan", "none"}:
         raise ValueError("empty amount")
+    
     # Detect sign
     sign = 1.0
     low = s.lower()
@@ -90,16 +91,44 @@ def _parse_amount(raw: Any) -> float:
         sign = -1.0
     if s.startswith("+") or low.endswith("cr") or " cr" in low:
         sign = 1.0
-    # Strip currency symbols, letters, parens, commas, spaces, sign chars
-    cleaned = re.sub(r"[^\d.]", "", s)
+        
+    # Extract currency symbol
+    currency = "Rs." # default
+    currency_match = re.search(r'([$€£¥₹]|Rs\.?|INR|USD|EUR|GBP)', s, re.IGNORECASE)
+    if currency_match:
+        currency = currency_match.group(1).upper()
+        if currency.startswith("RS"):
+            currency = "Rs."
+        elif currency == "INR":
+            currency = "Rs."
+        elif currency == "₹":
+            currency = "Rs."
+            
+    # Clean string to only numbers, commas, and dots
+    cleaned = re.sub(r"[^\d.,]", "", s)
     if cleaned == "":
         raise ValueError(f"no numeric value in amount: {raw!r}")
-    # Guard against multiple dots (e.g. thousands with '.') -> keep last as decimal
+        
+    # Handle European vs US formatting
+    if "," in cleaned and "." in cleaned:
+        last_comma = cleaned.rfind(",")
+        last_dot = cleaned.rfind(".")
+        if last_comma > last_dot:
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+    elif "," in cleaned:
+        parts = cleaned.split(",")
+        if len(parts) == 2 and len(parts[1]) in (1, 2):
+            cleaned = cleaned.replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+            
     if cleaned.count(".") > 1:
         parts = cleaned.split(".")
         cleaned = "".join(parts[:-1]) + "." + parts[-1]
-    value = float(cleaned)
-    return sign * value
+        
+    return sign * float(cleaned), currency
 
 
 def _parse_date(raw: Any) -> str:
@@ -160,8 +189,9 @@ def _dataframe_to_transactions(df: pd.DataFrame) -> list[dict]:
             if desc == "" or desc.lower() == "nan":
                 raise ValueError("empty description")
 
+            currency = "Rs."
             if has_amount:
-                amount = _parse_amount(row[amt_col])
+                amount, currency = _parse_amount(row[amt_col])
                 raw_amt = str(row[amt_col]).strip().lower()
                 if amount > 0 and not raw_amt.startswith("+") and not raw_amt.endswith("cr") and " cr" not in raw_amt:
                     desc_low = desc.lower()
@@ -174,19 +204,31 @@ def _dataframe_to_transactions(df: pd.DataFrame) -> list[dict]:
                 credit = 0.0
                 if debit_col is not None:
                     try:
-                        debit = abs(_parse_amount(row[debit_col]))
+                        parsed = _parse_amount(row[debit_col])
+                        debit = abs(parsed[0])
+                        currency = parsed[1]
                     except ValueError:
                         debit = 0.0
                 if credit_col is not None:
                     try:
-                        credit = abs(_parse_amount(row[credit_col]))
+                        parsed = _parse_amount(row[credit_col])
+                        credit = abs(parsed[0])
+                        currency = parsed[1]
                     except ValueError:
                         credit = 0.0
                 if debit == 0.0 and credit == 0.0:
                     raise ValueError("no debit/credit value")
                 amount = credit - debit
+                
+            # Extract payment method
+            desc_low = desc.lower()
+            payment_method = "Other"
+            for pm in ["upi", "neft", "imps", "rtgs", "pos", "atm", "cash"]:
+                if pm in desc_low:
+                    payment_method = pm.upper()
+                    break
 
-            transactions.append({"date": date, "description": desc, "amount": amount})
+            transactions.append({"date": date, "description": desc, "amount": amount, "currency": currency, "payment_method": payment_method})
         except ValueError as exc:
             errors.append(f"row {idx + 2}: {exc}")
             continue
@@ -448,11 +490,13 @@ def _llm_extract_transactions(text: str) -> list[dict]:
         prompt = (
             "You are a precise bank-statement parser. Extract EVERY transaction from "
             "the statement text below into a JSON array. Each element must be exactly:\n"
-            '{"date": "YYYY-MM-DD", "description": "string", "amount": number, "category": "string"}\n'
+            '{"date": "YYYY-MM-DD", "description": "string", "amount": number, "category": "string", "currency": "string", "payment_method": "string"}\n'
             "Rules: amount is NEGATIVE for debits/withdrawals/payments and POSITIVE "
             "for credits/deposits/salary. Do NOT include running balances as amounts. "
             "For category, create a short, logical category (e.g., Groceries, Food, Transfer, Utilities, Salary) "
             "based on the description. "
+            "Extract 'currency' symbol (e.g. $, €, Rs.). "
+            "Extract 'payment_method' if obvious (UPI, NEFT, IMPS, POS, CASH), otherwise 'Other'. "
             "Copy figures exactly as printed; never invent values. Return ONLY the JSON "
             "array, nothing else.\n\nSTATEMENT TEXT:\n" + snippet
         )

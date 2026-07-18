@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Anomaly } from "../api";
-import { inr } from "../lib/format";
+import { formatCurrency } from "../lib/format";
 import GlassCard from "./GlassCard";
 
 export default function AnomaliesPanel({
@@ -55,7 +55,7 @@ export default function AnomaliesPanel({
                       high ? "bg-red-500/20 text-red-300" : "bg-amber-500/20 text-amber-300"
                     }`}
                   >
-                    {inr(a.amount)}
+                    {formatCurrency(a.amount)}
                   </span>
                 </div>
               </motion.div>

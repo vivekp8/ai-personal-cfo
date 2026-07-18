@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { DashboardData, Simulation, runWhatIf } from "../api";
-import { inr, pct } from "../lib/format";
+import { formatCurrency, pct } from "../lib/format";
 import GlassCard from "./GlassCard";
 
 function scoreColor(score: number): string {
@@ -63,7 +63,7 @@ function ScenarioBar({
       </div>
 
       <div className="mt-3 space-y-1 text-xs text-slate-300">
-        <Row label="Monthly outflow" value={inr(outflow)} />
+        <Row label="Monthly outflow" value={formatCurrency(outflow)} />
         <Row label="Emergency fund" value={`${ef.toFixed(1)} mo`} />
         <Row label="Savings rate" value={pct(savingsRate)} />
         {extra && <Row label="Extra" value={extra} />}
@@ -194,7 +194,7 @@ export default function WhatIfPanel({
                   savingsAfter < 0 ? "text-red-400" : "text-slate-200"
                 }`}
               >
-                {inr(savingsAfter)}
+                {formatCurrency(savingsAfter)}
               </span>
             </div>
             <div className="mt-1 h-4 w-full overflow-hidden rounded-full bg-black/30">
@@ -212,7 +212,7 @@ export default function WhatIfPanel({
             </div>
             {savingsAfter < 0 && (
               <p className="mt-1 text-xs text-red-400">
-                This exceeds your estimated savings of {inr(baseSavings)}.
+                This exceeds your estimated savings of {formatCurrency(baseSavings)}.
               </p>
             )}
           </div>
@@ -239,7 +239,7 @@ export default function WhatIfPanel({
             outflow={sim.emi.monthly_outflow}
             ef={sim.emi.emergency_fund_months}
             savingsRate={sim.emi.savings_rate}
-            extra={`${inr(sim.emi.emi_monthly)}/mo · ${inr(sim.emi.interest_paid)} interest`}
+            extra={`${formatCurrency(sim.emi.emi_monthly)}/mo · ${formatCurrency(sim.emi.interest_paid)} interest`}
             recommended={sim.recommendation === "emi"}
           />
         </motion.div>

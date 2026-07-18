@@ -16,7 +16,7 @@ import {
   getGoalTypes,
   getGoals,
 } from "../api";
-import { inr } from "../lib/format";
+import { formatCurrency } from "../lib/format";
 import GlassCard from "./GlassCard";
 
 function riskColor(risk: string): string {
@@ -59,7 +59,7 @@ function GoalCard({ goal, onDelete }: { goal: GoalPlan; onDelete: () => void }) 
             <span className="truncate">{goal.name || goal.label}</span>
           </p>
           <p className="text-[11px] text-slate-400">
-            {goal.label} · target {inr(goal.target_amount)}
+            {goal.label} · target {formatCurrency(goal.target_amount)}
           </p>
         </div>
         <ProbGauge p={goal.completion_probability} risk={goal.risk} />
@@ -75,7 +75,7 @@ function GoalCard({ goal, onDelete }: { goal: GoalPlan; onDelete: () => void }) 
         />
       </div>
       <p className="mt-1 text-[11px] text-slate-400">
-        {inr(goal.current_saved)} of {inr(goal.target_amount)} ({goal.progress_pct}%)
+        {formatCurrency(goal.current_saved)} of {formatCurrency(goal.target_amount)} ({goal.progress_pct}%)
       </p>
 
       {/* trajectory sparkline */}
@@ -93,7 +93,7 @@ function GoalCard({ goal, onDelete }: { goal: GoalPlan; onDelete: () => void }) 
               <YAxis hide domain={[0, "dataMax"]} />
               <Tooltip
                 contentStyle={{ background: "#0b1220", border: "1px solid #ffffff22", fontSize: 11 }}
-                formatter={(v: number) => inr(v)}
+                formatter={(v: number) => formatCurrency(v)}
                 labelFormatter={(m) => `Month ${m}`}
               />
               <Area type="monotone" dataKey="balance" stroke="#2dd4bf" fill={`url(#g${goal.id})`} strokeWidth={2} />
@@ -109,7 +109,7 @@ function GoalCard({ goal, onDelete }: { goal: GoalPlan; onDelete: () => void }) 
         </div>
         <div className="rounded-md bg-black/20 py-1">
           <p className="text-slate-500">Need/mo</p>
-          <p className="text-slate-200">{inr(goal.required_monthly)}</p>
+          <p className="text-slate-200">{formatCurrency(goal.required_monthly)}</p>
         </div>
         <div className="rounded-md bg-black/20 py-1">
           <p className="text-slate-500">Risk</p>
@@ -119,7 +119,7 @@ function GoalCard({ goal, onDelete }: { goal: GoalPlan; onDelete: () => void }) 
 
       <div className="mt-2 flex items-center justify-between">
         <span className="text-[10px] text-slate-500">
-          by {goal.target_date} · surplus {inr(goal.monthly_surplus)}/mo
+          by {goal.target_date} · surplus {formatCurrency(goal.monthly_surplus)}/mo
         </span>
         <button
           onClick={onDelete}
@@ -255,7 +255,7 @@ export default function GoalPlannerPanel({ delay = 0 }: { delay?: number }) {
       </div>
       <p className="mt-1 text-[11px] text-slate-500">
         Leave months at 0 to auto-compute the timeline from your monthly surplus
-        ({inr(surplus)}/mo). Blank months uses your surplus as the contribution.
+        ({formatCurrency(surplus)}/mo). Blank months uses your surplus as the contribution.
       </p>
 
       {error && <p className="mt-2 text-sm text-rose-300">{error}</p>}

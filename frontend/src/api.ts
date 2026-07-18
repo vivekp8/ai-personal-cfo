@@ -11,6 +11,8 @@ export interface Transaction {
   description: string;
   amount: number;
   category: string;
+  currency?: string;
+  payment_method?: string;
 }
 
 export interface MonthlySummary {
@@ -19,6 +21,8 @@ export interface MonthlySummary {
     end_date: string;
     duration_days: number;
   };
+  dominant_currency: string;
+  payment_methods: Record<string, number>;
   months: string[];
   by_month_category: Record<string, Record<string, number>>;
   monthly_income: Record<string, number>;

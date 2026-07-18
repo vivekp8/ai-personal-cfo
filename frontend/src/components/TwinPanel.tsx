@@ -18,7 +18,7 @@ import {
   getSimulations,
   simulateTwin,
 } from "../api";
-import { inr, pct } from "../lib/format";
+import { formatCurrency, pct } from "../lib/format";
 import GlassCard from "./GlassCard";
 
 type Assumptions = {
@@ -189,7 +189,7 @@ export default function TwinPanel({ delay = 0 }: { delay?: number }) {
             <Slider label="Retire age" value={a.retirement_age} min={a.current_age + 1} max={75} step={1}
               format={(v) => `${v}`} onChange={(v) => set("retirement_age", v)} />
             <Slider label="Start savings" value={a.current_savings} min={0} max={2000000} step={10000}
-              format={(v) => inr(v, { compact: true })} onChange={(v) => set("current_savings", v)} />
+              format={(v) => formatCurrency(v, { compact: true })} onChange={(v) => set("current_savings", v)} />
           </div>
 
           {/* Goals */}
@@ -222,7 +222,7 @@ export default function TwinPanel({ delay = 0 }: { delay?: number }) {
                     key={i}
                     className="flex items-center gap-1 rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[11px] text-slate-300"
                   >
-                    {g.name} · {inr(g.target_amount, { compact: true })}
+                    {g.name} · {formatCurrency(g.target_amount, { compact: true })}
                     <button
                       onClick={() => setGoals((gs) => gs.filter((_, j) => j !== i))}
                       className="text-slate-500 hover:text-rose-300"
@@ -282,19 +282,19 @@ export default function TwinPanel({ delay = 0 }: { delay?: number }) {
                 <div className="rounded-xl bg-white/5 p-3">
                   <p className="text-[10px] uppercase text-slate-400">Net worth (yr {a.years})</p>
                   <p className="text-lg font-bold text-teal-accent">
-                    {inr(result.final_net_worth, { compact: true })}
+                    {formatCurrency(result.final_net_worth, { compact: true })}
                   </p>
                 </div>
                 <div className="rounded-xl bg-white/5 p-3">
                   <p className="text-[10px] uppercase text-slate-400">In today's value</p>
                   <p className="text-lg font-bold text-sky-300">
-                    {inr(result.final_real_net_worth, { compact: true })}
+                    {formatCurrency(result.final_real_net_worth, { compact: true })}
                   </p>
                 </div>
                 <div className="rounded-xl bg-white/5 p-3">
                   <p className="text-[10px] uppercase text-slate-400">Investment growth</p>
                   <p className="text-lg font-bold text-violet-accent">
-                    {inr(result.total_growth, { compact: true })}
+                    {formatCurrency(result.total_growth, { compact: true })}
                   </p>
                 </div>
               </div>
@@ -316,9 +316,9 @@ export default function TwinPanel({ delay = 0 }: { delay?: number }) {
                     <XAxis dataKey="year" stroke="#94a3b8" fontSize={11}
                       tickFormatter={(v) => `Y${v}`} />
                     <YAxis stroke="#94a3b8" fontSize={11}
-                      tickFormatter={(v) => inr(v, { compact: true })} />
+                      tickFormatter={(v) => formatCurrency(v, { compact: true })} />
                     <Tooltip
-                      formatter={(v: number) => inr(v)}
+                      formatter={(v: number) => formatCurrency(v)}
                       labelFormatter={(l) => `Year ${l}`}
                       contentStyle={{
                         background: "rgba(15,22,38,0.95)",
@@ -343,8 +343,8 @@ export default function TwinPanel({ delay = 0 }: { delay?: number }) {
                       Retirement at {ret.retirement_age}
                     </p>
                     <p className="mt-1 text-[12px] text-slate-300">
-                      Projected corpus {inr(ret.projected_corpus ?? 0, { compact: true })} →{" "}
-                      ~{inr(ret.real_sustainable_monthly_income ?? 0, { compact: true })}/mo in
+                      Projected corpus {formatCurrency(ret.projected_corpus ?? 0, { compact: true })} →{" "}
+                      ~{formatCurrency(ret.real_sustainable_monthly_income ?? 0, { compact: true })}/mo in
                       today's money (4% rule).
                     </p>
                   </div>
@@ -382,7 +382,7 @@ export default function TwinPanel({ delay = 0 }: { delay?: number }) {
                 key={s.id}
                 className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-slate-300"
               >
-                {s.name} · {inr(s.result.final_net_worth, { compact: true })}
+                {s.name} · {formatCurrency(s.result.final_net_worth, { compact: true })}
                 <button
                   onClick={() => removeSaved(s.id)}
                   className="text-slate-500 hover:text-rose-300"

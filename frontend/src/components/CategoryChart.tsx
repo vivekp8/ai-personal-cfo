@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { AnimatePresence, motion } from "framer-motion";
 import { MonthlySummary, Transaction } from "../api";
-import { categoryColor, inr } from "../lib/format";
+import { categoryColor, formatCurrency } from "../lib/format";
 import GlassCard from "./GlassCard";
 
 interface Props {
@@ -72,7 +72,7 @@ export default function CategoryChart({ summary, transactions, delay = 0 }: Prop
                 })}
               </Pie>
               <Tooltip
-                formatter={(v: number) => inr(v)}
+                formatter={(v: number) => formatCurrency(v)}
                 contentStyle={{
                   background: "rgba(15,22,38,0.95)",
                   border: "1px solid rgba(148,163,184,0.2)",
@@ -103,7 +103,7 @@ export default function CategoryChart({ summary, transactions, delay = 0 }: Prop
                 <span className="text-slate-200">{d.name}</span>
               </span>
               <span className="text-slate-300 tabular-nums">
-                {inr(d.value)}{" "}
+                {formatCurrency(d.value)}{" "}
                 <span className="text-slate-500">
                   ({((d.value / total) * 100).toFixed(0)}%)
                 </span>
@@ -138,7 +138,7 @@ export default function CategoryChart({ summary, transactions, delay = 0 }: Prop
                       {t.description}
                     </span>
                     <span className="tabular-nums text-slate-200">
-                      {inr(Math.abs(t.amount))}
+                      {formatCurrency(Math.abs(t.amount))}
                     </span>
                   </div>
                 ))}
