@@ -66,7 +66,11 @@ export default function Dashboard({
           animate={{ opacity: 1 }}
           className="mb-4 text-sm text-slate-400"
         >
-          Analysis based on {data.monthly_summary.months.length} months
+          {data.monthly_summary.timeline ? (
+            <>Statement Period: {data.monthly_summary.timeline.start_date} to {data.monthly_summary.timeline.end_date} ({data.monthly_summary.timeline.duration_days} days)</>
+          ) : (
+            <>Analysis based on {data.monthly_summary.months.length} months</>
+          )}
           {ref && ` · latest: ${monthLabel(ref)}`}
         </motion.p>
 

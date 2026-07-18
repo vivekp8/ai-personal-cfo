@@ -26,10 +26,22 @@ def aggregate_monthly(categorized: list[dict]) -> dict:
     monthly_expenses: dict[str, float] = defaultdict(float)
     category_totals: dict[str, float] = defaultdict(float)
 
+    from datetime import datetime
+    
+    start_date = None
+    end_date = None
+
     for txn in categorized:
         month = _month_key(txn["date"])
         cat = txn["category"]
         amt = txn["amount"]
+        
+        # Track earliest and latest dates
+        if not start_date or txn["date"] < start_date:
+            start_date = txn["date"]
+        if not end_date or txn["date"] > end_date:
+            end_date = txn["date"]
+            
         by_month_category[month][cat] += amt
         if amt > 0 or cat == "Income":
             monthly_income[month] += amt
@@ -39,8 +51,19 @@ def aggregate_monthly(categorized: list[dict]) -> dict:
             category_totals[cat] += spend
 
     months = sorted(by_month_category.keys())
+    
+    duration_days = 0
+    if start_date and end_date:
+        d1 = datetime.strptime(start_date, "%Y-%m-%d")
+        d2 = datetime.strptime(end_date, "%Y-%m-%d")
+        duration_days = (d2 - d1).days
 
     return {
+        "timeline": {
+            "start_date": start_date or "",
+            "end_date": end_date or "",
+            "duration_days": duration_days
+        },
         "months": months,
         "by_month_category": {m: dict(by_month_category[m]) for m in months},
         "monthly_income": {m: round(monthly_income[m], 2) for m in months},

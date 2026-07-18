@@ -14,6 +14,11 @@ export interface Transaction {
 }
 
 export interface MonthlySummary {
+  timeline: {
+    start_date: string;
+    end_date: string;
+    duration_days: number;
+  };
   months: string[];
   by_month_category: Record<string, Record<string, number>>;
   monthly_income: Record<string, number>;

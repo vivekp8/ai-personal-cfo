@@ -442,9 +442,11 @@ def _llm_extract_transactions(text: str) -> list[dict]:
         prompt = (
             "You are a precise bank-statement parser. Extract EVERY transaction from "
             "the statement text below into a JSON array. Each element must be exactly:\n"
-            '{"date": "YYYY-MM-DD", "description": "string", "amount": number}\n'
+            '{"date": "YYYY-MM-DD", "description": "string", "amount": number, "category": "string"}\n'
             "Rules: amount is NEGATIVE for debits/withdrawals/payments and POSITIVE "
             "for credits/deposits/salary. Do NOT include running balances as amounts. "
+            "For category, create a short, logical category (e.g., Groceries, Food, Transfer, Utilities, Salary) "
+            "based on the description. "
             "Copy figures exactly as printed; never invent values. Return ONLY the JSON "
             "array, nothing else.\n\nSTATEMENT TEXT:\n" + snippet
         )
@@ -477,10 +479,11 @@ def _llm_extract_transactions(text: str) -> list[dict]:
                 date = _parse_date(item.get("date"))
                 amount = _parse_amount(item.get("amount"))
                 desc = str(item.get("description", "")).strip()
+                cat = str(item.get("category", "")).strip()
             except (ValueError, TypeError):
                 continue
             if desc:
-                out.append({"date": date, "description": desc, "amount": amount})
+                out.append({"date": date, "description": desc, "amount": amount, "category": cat or "Uncategorized"})
 
     out.sort(key=lambda t: t["date"])
     return out
