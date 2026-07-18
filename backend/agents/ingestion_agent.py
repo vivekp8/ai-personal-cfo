@@ -417,10 +417,9 @@ def _llm_extract_transactions(text: str) -> list[dict]:
         return []
 
     # Chunk the text to avoid LLM output token limits on massive statements
-    # Use 100k chars (~25k tokens) so a 30-page PDF is only ~2 chunks. 
-    # This avoids both Vercel timeouts (too many sequential chunks) and 
-    # LLM rate limits (429 errors from parallel requests).
-    chunk_size = 100000
+    # Use 15000 chars (~4k tokens) so it safely fits in ANY model's context window 
+    # (even 8k models on Groq/Ollama) to ensure no chunks are rejected.
+    chunk_size = 15000
     lines = text.splitlines()
     chunks = []
     current_chunk = []
