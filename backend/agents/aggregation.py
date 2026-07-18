@@ -56,7 +56,7 @@ def aggregate_monthly(categorized: list[dict]) -> dict:
     if start_date and end_date:
         d1 = datetime.strptime(start_date, "%Y-%m-%d")
         d2 = datetime.strptime(end_date, "%Y-%m-%d")
-        duration_days = (d2 - d1).days
+        duration_days = (d2 - d1).days + 1
 
     return {
         "timeline": {

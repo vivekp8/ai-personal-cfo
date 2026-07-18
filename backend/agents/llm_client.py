@@ -31,25 +31,35 @@ def categorize_with_llm(descriptions: list[str]) -> dict[str, str]:
     if not is_configured() or not descriptions:
         return {}
         
-    desc_list = "\n".join(f"- {d}" for d in descriptions)
-    prompt = (
-        "You are a bank-transaction categorizer. For each of the following descriptions, "
-        "assign a short, logical category (e.g., Groceries, Food, Travel, Shopping, Salary, Utilities). "
-        "Return the output strictly as a JSON dictionary mapping the EXACT description string to its category.\n\n"
-        f"Descriptions:\n{desc_list}"
-    )
+    import re
+    result = {}
+    chunk_size = 50
     
-    text = llm.generate(prompt)
-    if not text or text.startswith("[LLM error"):
-        return {}
+    for i in range(0, len(descriptions), chunk_size):
+        chunk = descriptions[i : i + chunk_size]
+        desc_list = "\n".join(f'{idx}: "{d}"' for idx, d in enumerate(chunk))
         
-    import json
-    try:
-        start = text.find("{")
-        end = text.rfind("}")
-        if start != -1 and end != -1:
-            return json.loads(text[start:end+1])
-    except Exception:
-        pass
+        prompt = (
+            "You are a bank-transaction categorizer. For each of the following descriptions, "
+            "assign a short, logical category (e.g., Groceries, Food, Travel, Shopping, Salary, Utilities). "
+            "Return the output strictly as a JSON dictionary mapping the NUMERIC ID to its category.\n"
+            "Example format: {\"0\": \"Food\", \"1\": \"Utilities\"}\n\n"
+            f"Descriptions:\n{desc_list}"
+        )
         
-    return {}
+        text = llm.generate(prompt)
+        if not text or text.startswith("[LLM error"):
+            continue
+            
+        # Robustly extract ID-to-category mappings using regex 
+        # to avoid JSONDecodeError on truncated or slightly malformed outputs
+        matches = re.findall(r'"(\d+)"\s*:\s*"([^"]+)"', text)
+        for idx_str, cat in matches:
+            try:
+                idx = int(idx_str)
+                if 0 <= idx < len(chunk):
+                    result[chunk[idx]] = cat
+            except ValueError:
+                pass
+                
+    return result
