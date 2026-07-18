@@ -416,41 +416,69 @@ def _llm_extract_transactions(text: str) -> list[dict]:
     if not llm_client.is_configured():
         return []
 
-    snippet = text[:1000000]
-    prompt = (
-        "You are a precise bank-statement parser. Extract EVERY transaction from "
-        "the statement text below into a JSON array. Each element must be exactly:\n"
-        '{"date": "YYYY-MM-DD", "description": "string", "amount": number}\n'
-        "Rules: amount is NEGATIVE for debits/withdrawals/payments and POSITIVE "
-        "for credits/deposits/salary. Do NOT include running balances as amounts. "
-        "Copy figures exactly as printed; never invent values. Return ONLY the JSON "
-        "array, nothing else.\n\nSTATEMENT TEXT:\n" + snippet
-    )
-    raw = llm_client.generate(prompt)
-    if not raw:
-        return []
-    if raw.startswith("[LLM error"):
-        raise IngestionError(f"PDF extraction failed because the LLM encountered an error: {raw}")
-    start = raw.find("[")
-    end = raw.rfind("]")
-    if start == -1 or end == -1 or end <= start:
-        return []
-    try:
-        data = json.loads(raw[start : end + 1])
-    except Exception:  # noqa: BLE001
-        return []
+    # Chunk the text to avoid LLM output token limits on massive statements
+    chunk_size = 20000
+    lines = text.splitlines()
+    chunks = []
+    current_chunk = []
+    current_len = 0
+    for line in lines:
+        if current_len + len(line) > chunk_size and current_chunk:
+            chunks.append("\n".join(current_chunk))
+            current_chunk = []
+            current_len = 0
+        current_chunk.append(line)
+        current_len += len(line) + 1
+    if current_chunk:
+        chunks.append("\n".join(current_chunk))
+
     out: list[dict] = []
-    for item in data if isinstance(data, list) else []:
-        if not isinstance(item, dict):
+    for snippet in chunks:
+        if not snippet.strip():
             continue
-        try:
-            date = _parse_date(item.get("date"))
-            amount = float(item.get("amount"))
-            desc = str(item.get("description", "")).strip()
-        except (ValueError, TypeError):
+        prompt = (
+            "You are a precise bank-statement parser. Extract EVERY transaction from "
+            "the statement text below into a JSON array. Each element must be exactly:\n"
+            '{"date": "YYYY-MM-DD", "description": "string", "amount": number}\n'
+            "Rules: amount is NEGATIVE for debits/withdrawals/payments and POSITIVE "
+            "for credits/deposits/salary. Do NOT include running balances as amounts. "
+            "Copy figures exactly as printed; never invent values. Return ONLY the JSON "
+            "array, nothing else.\n\nSTATEMENT TEXT:\n" + snippet
+        )
+        raw = llm_client.generate(prompt)
+        if not raw or raw.startswith("[LLM error"):
             continue
-        if desc:
-            out.append({"date": date, "description": desc, "amount": amount})
+            
+        data = []
+        start = raw.find("[")
+        end = raw.rfind("]")
+        if start != -1 and end != -1 and end > start:
+            try:
+                data = json.loads(raw[start : end + 1])
+            except Exception:
+                pass
+                
+        if not data:
+            # Fallback for truncated/broken JSON
+            objs = re.findall(r'\{[^{}]+\}', raw)
+            for o in objs:
+                try:
+                    data.append(json.loads(o))
+                except Exception:
+                    pass
+
+        for item in data if isinstance(data, list) else []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                date = _parse_date(item.get("date"))
+                amount = float(item.get("amount"))
+                desc = str(item.get("description", "")).strip()
+            except (ValueError, TypeError):
+                continue
+            if desc:
+                out.append({"date": date, "description": desc, "amount": amount})
+
     out.sort(key=lambda t: t["date"])
     return out
 
