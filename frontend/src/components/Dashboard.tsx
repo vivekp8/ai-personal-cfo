@@ -76,10 +76,10 @@ export default function Dashboard({
 
         {/* Top stat strip */}
         <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-          <StatCard label="Monthly income" value={hs.income} accent="#4ade80" delay={0.05} />
-          <StatCard label="Monthly expenses" value={hs.expenses} accent="#fb923c" delay={0.1} />
+          <StatCard label="Avg Monthly Income" value={hs.income} accent="#4ade80" delay={0.05} />
+          <StatCard label="Avg Monthly Expenses" value={hs.expenses} accent="#fb923c" delay={0.1} />
           <StatCard
-            label="Monthly surplus"
+            label="Avg Monthly Surplus"
             value={hs.income - hs.expenses}
             accent="#2dd4bf"
             delay={0.15}

@@ -34,7 +34,7 @@ export default function CategoryChart({ summary, transactions, delay = 0 }: Prop
   }, [active, transactions]);
 
   return (
-    <GlassCard title="Spending by Category" subtitle="Click a slice to drill in" delay={delay}>
+    <GlassCard title="Total Spending by Category" subtitle="Click a slice to drill in" delay={delay}>
       <div className="flex flex-col md:flex-row gap-4">
         <div style={{ width: "100%", height: 240 }} className="md:w-1/2">
           <ResponsiveContainer>

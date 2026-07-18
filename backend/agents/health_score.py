@@ -48,8 +48,10 @@ def build_health_score(
         }
 
     latest = months[-1]
-    income = monthly_summary["monthly_income"].get(latest, 0.0)
-    expenses = monthly_summary["monthly_expenses"].get(latest, 0.0)
+    
+    num_months = len(months)
+    income = sum(monthly_summary["monthly_income"].values()) / num_months
+    expenses = sum(monthly_summary["monthly_expenses"].values()) / num_months
 
     # Estimate emergency fund from average monthly surplus if not supplied.
     if emergency_fund_months == 0.0:
