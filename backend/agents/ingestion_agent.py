@@ -262,12 +262,12 @@ _LINE_DATE_RE = re.compile(
 )
 # A monetary token with 2 decimals, optional grouping, sign, parens and Dr/Cr.
 _MONEY_RE = re.compile(
-    r"(\(?\s*[-+]?\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})\s*\)?)\s*(cr|dr)?",
+    r"(\(?\s*[-+]?\d+(?:,\d{2,3})*(?:\.\d{1,2})\s*\)?)\s*(cr|dr)?",
     re.IGNORECASE,
 )
 # Fallback: integer amounts (no decimals) with optional grouping / Dr-Cr.
 _MONEY_INT_RE = re.compile(
-    r"(\(?\s*[-+]?\d{1,3}(?:,\d{2,3})+\s*\)?|\(?\s*[-+]?\d{3,}\s*\)?)\s*(cr|dr)?",
+    r"(\(?\s*[-+]?\d+(?:,\d{2,3})+\s*\)?|\(?\s*[-+]?\d{3,}\s*\)?)\s*(cr|dr)?",
     re.IGNORECASE,
 )
 _CREDIT_HINTS = (
@@ -416,7 +416,7 @@ def _llm_extract_transactions(text: str) -> list[dict]:
     if not llm_client.is_configured():
         return []
 
-    snippet = text[:12000]
+    snippet = text[:1000000]
     prompt = (
         "You are a precise bank-statement parser. Extract EVERY transaction from "
         "the statement text below into a JSON array. Each element must be exactly:\n"
