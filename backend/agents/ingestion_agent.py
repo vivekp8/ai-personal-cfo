@@ -417,7 +417,10 @@ def _llm_extract_transactions(text: str) -> list[dict]:
         return []
 
     # Chunk the text to avoid LLM output token limits on massive statements
-    chunk_size = 20000
+    # Use 100k chars (~25k tokens) so a 30-page PDF is only ~2 chunks. 
+    # This avoids both Vercel timeouts (too many sequential chunks) and 
+    # LLM rate limits (429 errors from parallel requests).
+    chunk_size = 100000
     lines = text.splitlines()
     chunks = []
     current_chunk = []
@@ -432,11 +435,11 @@ def _llm_extract_transactions(text: str) -> list[dict]:
     if current_chunk:
         chunks.append("\n".join(current_chunk))
 
-    import concurrent.futures
-
-    def process_chunk(snippet: str) -> list[dict]:
+    out: list[dict] = []
+    
+    for snippet in chunks:
         if not snippet.strip():
-            return []
+            continue
         prompt = (
             "You are a precise bank-statement parser. Extract EVERY transaction from "
             "the statement text below into a JSON array. Each element must be exactly:\n"
@@ -448,7 +451,7 @@ def _llm_extract_transactions(text: str) -> list[dict]:
         )
         raw = llm_client.generate(prompt)
         if not raw or raw.startswith("[LLM error"):
-            return []
+            continue
             
         data = []
         start = raw.find("[")
@@ -468,7 +471,6 @@ def _llm_extract_transactions(text: str) -> list[dict]:
                 except Exception:
                     pass
 
-        chunk_out = []
         for item in data if isinstance(data, list) else []:
             if not isinstance(item, dict):
                 continue
@@ -479,15 +481,7 @@ def _llm_extract_transactions(text: str) -> list[dict]:
             except (ValueError, TypeError):
                 continue
             if desc:
-                chunk_out.append({"date": date, "description": desc, "amount": amount})
-        return chunk_out
-
-    out: list[dict] = []
-    # Process all chunks in parallel (up to 10 concurrently) to prevent HTTP timeouts
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        results = executor.map(process_chunk, chunks)
-        for res in results:
-            out.extend(res)
+                out.append({"date": date, "description": desc, "amount": amount})
 
     out.sort(key=lambda t: t["date"])
     return out
