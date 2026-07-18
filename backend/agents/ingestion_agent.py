@@ -162,6 +162,12 @@ def _dataframe_to_transactions(df: pd.DataFrame) -> list[dict]:
 
             if has_amount:
                 amount = _parse_amount(row[amt_col])
+                raw_amt = str(row[amt_col]).strip().lower()
+                if amount > 0 and not raw_amt.startswith("+") and not raw_amt.endswith("cr") and " cr" not in raw_amt:
+                    desc_low = desc.lower()
+                    is_credit = any(h in desc_low for h in _CREDIT_HINTS)
+                    if not is_credit:
+                        amount = -amount
             else:
                 # Combine debit (negative) and credit (positive) columns.
                 debit = 0.0
@@ -452,7 +458,7 @@ def _llm_extract_transactions(text: str) -> list[dict]:
         )
         raw = llm_client.generate(prompt)
         if not raw or raw.startswith("[LLM error"):
-            continue
+            raise IngestionError(f"LLM extraction failed: {raw}")
             
         data = []
         start = raw.find("[")

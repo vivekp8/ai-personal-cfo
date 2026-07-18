@@ -27,7 +27,7 @@ def categorize(transactions: list[dict]) -> list[dict]:
     if missing_descriptions:
         try:
             from agents.llm_client import categorize_with_llm
-            category_map = categorize_with_llm(sorted(list(missing_descriptions)))
+            category_map = categorize_with_llm(sorted(list(missing_descriptions))) or {}
         except Exception:  # noqa: BLE001
             pass
 
