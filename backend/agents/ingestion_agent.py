@@ -474,7 +474,7 @@ def _llm_extract_transactions(text: str) -> list[dict]:
                 continue
             try:
                 date = _parse_date(item.get("date"))
-                amount = float(item.get("amount"))
+                amount = _parse_amount(item.get("amount"))
                 desc = str(item.get("description", "")).strip()
             except (ValueError, TypeError):
                 continue
