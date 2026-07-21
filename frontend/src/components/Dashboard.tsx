@@ -39,10 +39,14 @@ function StatCard({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
-      className="glass rounded-2xl p-4"
+      className="glass rounded-2xl p-4 relative overflow-hidden group hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
     >
-      <p className="text-[11px] uppercase tracking-wider text-slate-400">{label}</p>
-      <p className="mt-1 text-2xl font-extrabold" style={{ color: accent }}>
+      <div 
+        className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300 pointer-events-none"
+        style={{ background: `radial-gradient(circle at top right, ${accent}, transparent 70%)` }}
+      />
+      <p className="text-[11px] uppercase tracking-wider text-slate-400 relative z-10">{label}</p>
+      <p className="mt-1 text-2xl font-extrabold relative z-10 font-display tracking-tight" style={{ color: accent }}>
         <AnimatedNumber value={value} format={(n) => formatCurrency(n, { currency })} />
       </p>
     </motion.div>
@@ -87,19 +91,19 @@ export default function Dashboard({
         </motion.p>
 
         {/* Tabs */}
-        <div className="mb-6 flex space-x-2 overflow-x-auto rounded-xl bg-navy-800/50 p-1 backdrop-blur-sm sm:w-fit">
+        <div className="mb-6 flex space-x-2 overflow-x-auto rounded-xl bg-navy-800/60 p-1.5 backdrop-blur-md sm:w-fit border border-white/5 shadow-inner">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`relative whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === tab.id ? "text-navy-900" : "text-slate-400 hover:text-slate-200"
+                activeTab === tab.id ? "text-navy-900" : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
               }`}
             >
               {activeTab === tab.id && (
                 <motion.div
                   layoutId="active-tab"
-                  className="absolute inset-0 rounded-lg bg-teal-400"
+                  className="absolute inset-0 rounded-lg bg-gradient-to-r from-teal-400 to-teal-300 shadow-sm"
                   initial={false}
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
@@ -228,8 +232,7 @@ export default function Dashboard({
         whileHover={{ scale: 1.08 }}
         whileTap={{ scale: 0.95 }}
         title="Talk to your CFO"
-        className="fixed bottom-6 right-6 z-40 flex h-16 w-16 items-center justify-center rounded-full border border-cyan-400/40 bg-navy-900/70 text-2xl backdrop-blur"
-        style={{ boxShadow: "0 0 20px rgba(34,211,238,0.55)" }}
+        className="fixed bottom-6 right-6 z-40 flex h-16 w-16 items-center justify-center rounded-full border border-teal-400/40 bg-navy-900/80 text-2xl backdrop-blur shadow-glow animate-pulseGlow"
       >
         <span
           className="absolute inset-0 rounded-full"

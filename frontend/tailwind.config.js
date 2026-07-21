@@ -18,6 +18,12 @@ export default {
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
+        display: ["Outfit", "system-ui", "sans-serif"],
+      },
+      boxShadow: {
+        'glow': '0 0 20px rgba(45, 212, 191, 0.4)',
+        'glow-violet': '0 0 20px rgba(167, 139, 250, 0.4)',
+        'glass-inner': 'inset 0 1px 0 0 rgba(255, 255, 255, 0.1)',
       },
       backdropBlur: {
         xs: "2px",

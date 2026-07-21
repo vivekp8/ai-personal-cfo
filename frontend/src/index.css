@@ -25,22 +25,31 @@ body {
 .glass {
   background: rgba(22, 31, 54, 0.55);
   border: 1px solid rgba(148, 163, 184, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+  transition: all 0.3s ease;
 }
 
 .glass-strong {
   background: rgba(15, 22, 38, 0.8);
   border: 1px solid rgba(148, 163, 184, 0.15);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
+  transition: all 0.3s ease;
 }
 
 /* Ambient gradient backdrop used behind non-3D content */
 .ambient-bg {
   background:
-    radial-gradient(1200px 600px at 20% -10%, rgba(45, 212, 191, 0.12), transparent 60%),
-    radial-gradient(900px 500px at 90% 10%, rgba(167, 139, 250, 0.12), transparent 55%),
+    radial-gradient(1200px 600px at 20% -10%, rgba(45, 212, 191, 0.15), transparent 70%),
+    radial-gradient(900px 500px at 90% 10%, rgba(167, 139, 250, 0.15), transparent 60%),
+    radial-gradient(800px 400px at 50% 100%, rgba(56, 189, 248, 0.08), transparent 50%),
     #0a0e1a;
 }
 

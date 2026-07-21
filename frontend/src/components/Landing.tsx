@@ -88,8 +88,8 @@ export default function Landing({ onLoaded }: Props) {
           transition={{ duration: 0.7 }}
           className="text-center mb-8"
         >
-          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight">
-            <span className="bg-gradient-to-r from-teal-accent via-white to-violet-accent bg-clip-text text-transparent">
+          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tighter font-display">
+            <span className="bg-gradient-to-r from-teal-400 via-white to-violet-400 bg-clip-text text-transparent drop-shadow-sm">
               AI Personal CFO
             </span>
           </h1>
@@ -119,10 +119,10 @@ export default function Landing({ onLoaded }: Props) {
               if (f) handleFile(f);
             }}
             onClick={() => inputRef.current?.click()}
-            className={`glass-strong cursor-pointer rounded-2xl border-2 border-dashed p-10 text-center transition-all ${
+            className={`glass-strong cursor-pointer rounded-2xl border-2 border-dashed p-10 text-center transition-all duration-300 group ${
               dragOver
-                ? "border-teal-accent bg-teal-accent/5 scale-[1.02]"
-                : "border-white/15 hover:border-white/30"
+                ? "border-teal-400 bg-teal-400/10 scale-[1.02] shadow-glow"
+                : "border-white/15 hover:border-teal-400/40 hover:bg-white/5 hover:shadow-glow"
             }`}
           >
             <input
@@ -150,13 +150,15 @@ export default function Landing({ onLoaded }: Props) {
                     {Math.round(progress)}%
                   </span>
                 </div>
-                <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/10">
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-navy-900/50 shadow-inner">
                   <motion.div
-                    className="h-full rounded-full bg-gradient-to-r from-teal-accent to-violet-accent"
-                    style={{ boxShadow: "0 0 12px rgba(45,212,191,0.6)" }}
+                    className="h-full rounded-full bg-gradient-to-r from-teal-400 via-teal-300 to-violet-400 relative"
+                    style={{ boxShadow: "0 0 16px rgba(45,212,191,0.8)" }}
                     animate={{ width: `${progress}%` }}
                     transition={{ ease: "easeOut", duration: 0.3 }}
-                  />
+                  >
+                    <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                  </motion.div>
                 </div>
                 <p className="text-xs text-slate-400">Analyzing your statement…</p>
               </div>
