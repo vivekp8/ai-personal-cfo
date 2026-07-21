@@ -527,13 +527,24 @@ def _llm_extract_transactions(text: str) -> list[dict]:
                 continue
             try:
                 date = _parse_date(item.get("date"))
-                amount = _parse_amount(item.get("amount"))
+                amount, currency = _parse_amount(item.get("amount"))
                 desc = str(item.get("description", "")).strip()
                 cat = str(item.get("category", "")).strip()
+                pm = str(item.get("payment_method", "Other")).strip()
+                llm_currency = str(item.get("currency", "")).strip()
+                if llm_currency:
+                    currency = llm_currency
             except (ValueError, TypeError):
                 continue
             if desc:
-                out.append({"date": date, "description": desc, "amount": amount, "category": cat or "Uncategorized"})
+                out.append({
+                    "date": date, 
+                    "description": desc, 
+                    "amount": amount, 
+                    "currency": currency,
+                    "payment_method": pm,
+                    "category": cat or "Uncategorized"
+                })
 
     out.sort(key=lambda t: t["date"])
     return out
